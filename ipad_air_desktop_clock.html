@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>iPad Air 桌面時鐘</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+        }
+
+        /* 背景圖片層 - 強制最高清晰度渲染 */
+        #bg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            transition: opacity 1.5s ease-in-out, filter 0.5s ease;
+            z-index: 1;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+
+        /* 背景遮罩 */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            z-index: 2;
+        }
+
+        /* 主要內容容器 */
+        #content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 3;
+            padding: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        /* 時鐘與日期樣式 */
+        #clock {
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+            font-variant-numeric: tabular-nums;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        #date {
+            font-weight: 400;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center;
+        }
+
+        /* 設定按鈕與全螢幕按鈕 */
+        .control-btn {
+            position: fixed;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 20px;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background 0.2s, opacity 0.3s;
+            opacity: 0.8;
+        }
+
+        .control-btn:hover {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        #settings-btn {
+            bottom: 20px;
+            right: 20px;
+        }
+
+        #fullscreen-btn {
+            bottom: 20px;
+            right: 74px;
+        }
+
+        /* 設定面板 Modal */
+        #settings-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        #settings-modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: rgba(30, 30, 30, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            width: 90%;
+            max-width: 420px;
+            max-height: 85vh;
+            border-radius: 16px;
+            padding: 24px;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 12px;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .close-btn:hover {
+            color: #fff;
+        }
+
+        .setting-group {
+            margin-bottom: 18px;
+        }
+
+        .setting-group label {
+            display: block;
+            font-size: 13px;
+            color: #bbb;
+            margin-bottom: 6px;
+        }
+
+        .setting-group select, .setting-group input[type="range"] {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(50, 50, 50, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .setting-group input[type="range"] {
+            padding: 0;
+            height: 6px;
+            background: #555;
+            border-radius: 3px;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .setting-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .value-display {
+            float: right;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 10px;
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #005ec4;
+        }
+
+        .btn-danger {
+            width: 100%;
+            padding: 8px;
+            background: #ff3b30;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 6px;
+            transition: background 0.2s;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .file-upload-info {
+            font-size: 12px;
+            color: #888;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 背景層 -->
+    <div id="bg-layer"></div>
+    <div id="overlay"></div>
+
+    <!-- 顯示時鐘與日期 -->
+    <div id="content">
+        <div id="clock">00:00:00</div>
+        <div id="date">2026年10月19日 星期一</div>
+    </div>
+
+    <!-- 操控按鈕 -->
+    <button id="fullscreen-btn" class="control-btn" title="全螢幕">⛶</button>
+    <button id="settings-btn" class="control-btn" title="設定">⚙</button>
+
+    <!-- 設定面板 Modal -->
+    <div id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>桌面時鐘設定</h2>
+                <button class="close-btn" id="close-modal">&times;</button>
+            </div>
+
+            <!-- 背景來源設定 -->
+            <div class="setting-group">
+                <label>背景圖片來源</label>
+                <select id="bg-source-select">
+                    <option value="default">預設線上精選背景</option>
+                    <option value="folder">image 資料夾圖片 (自訂上傳)</option>
+                </select>
+                <div id="folder-upload-container" style="margin-top: 10px; display: none;">
+                    <input type="file" id="folder-images-input" multiple accept="image/*" style="display: none;">
+                    <button class="btn-primary" id="select-folder-btn" style="background: #34c759;">📂 選擇 image 資料夾內的所有圖片</button>
+                    <button class="btn-danger" id="clear-images-btn">🗑️ 清除所有已上傳的圖片</button>
+                    <div class="file-upload-info" id="upload-status">已載入 0 張自訂圖片。</div>
+                </div>
+            </div>
+
+            <!-- 背景切換間隔 -->
+            <div class="setting-group">
+                <label>背景更換頻率</label>
+                <select id="bg-interval-select">
+                    <option value="30000">每 30 秒</option>
+                    <option value="60000" selected>每 1 分鐘</option>
+                    <option value="300000">每 5 分鐘</option>
+                    <option value="900000">每 15 分鐘</option>
+                    <option value="1800000">每 30 分鐘</option>
+                </select>
+            </div>
+
+            <!-- 背景清晰/模糊設定 -->
+            <div class="setting-group">
+                <label>背景模糊程度 <span class="value-display" id="blur-val">0px</span></label>
+                <input type="range" id="blur-range" min="0" max="20" value="0">
+            </div>
+
+            <!-- 背景亮度 (遮罩) -->
+            <div class="setting-group">
+                <label>背景遮罩暗度 <span class="value-display" id="dim-val">20%</span></label>
+                <input type="range" id="dim-range" min="0" max="80" value="20">
+            </div>
+
+            <!-- 時鐘字體大小設定 -->
+            <div class="setting-group">
+                <label>時鐘字體大小 <span class="value-display" id="time-size-val">80px</span></label>
+                <input type="range" id="time-size-range" min="40" max="150" value="80">
+            </div>
+
+            <!-- 日期字體大小設定 -->
+            <div class="setting-group">
+                <label>日期字體大小 <span class="value-display" id="date-size-val">24px</span></label>
+                <input type="range" id="date-size-range" min="14" max="40" value="24">
+            </div>
+
+            <!-- 上下位置微調 -->
+            <div class="setting-group">
+                <label>畫面上下位置微調 <span class="value-display" id="pos-val">0px</span></label>
+                <input type="range" id="pos-range" min="-150" max="150" value="0">
+            </div>
+
+            <button class="btn-primary" id="save-settings-btn">儲存並關閉</button>
+        </div>
+    </div>
+
+    <script>
+        // 預設背景圖庫
+        const defaultWallpapers = [
+            'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80',
+            'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1920&q=80',
+            'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80',
+            'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80',
+            'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=80'
+        ];
+
+        let customImages = JSON.parse(localStorage.getItem('ipad_custom_images') || '[]');
+        let currentBgIndex = 0;
+        let bgTimer = null;
+
+        // 設定變數預設值
+        let settings = {
+            bgSource: localStorage.getItem('ipad_bg_source') || 'default',
+            bgInterval: parseInt(localStorage.getItem('ipad_bg_interval') || '60000'),
+            timeSize: localStorage.getItem('ipad_time_size') || '80',
+            dateSize: localStorage.getItem('ipad_date_size') || '24',
+            posY: localStorage.getItem('ipad_pos_y') || '0',
+            dimLevel: localStorage.getItem('ipad_dim_level') || '20',
+            blurLevel: localStorage.getItem('ipad_blur_level') || '0'
+        };
+
+        // DOM 元素
+        const clockEl = document.getElementById('clock');
+        const dateEl = document.getElementById('date');
+        const bgLayer = document.getElementById('bg-layer');
+        const overlay = document.getElementById('overlay');
+        const contentEl = document.getElementById('content');
+        
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsBtn = document.getElementById('settings-btn');
+        const closeModalBtn = document.getElementById('close-modal');
+        const saveSettingsBtn = document.getElementById('save-settings-btn');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+
+        const bgSourceSelect = document.getElementById('bg-source-select');
+        const folderUploadContainer = document.getElementById('folder-upload-container');
+        const selectFolderBtn = document.getElementById('select-folder-btn');
+        const clearImagesBtn = document.getElementById('clear-images-btn');
+        const folderImagesInput = document.getElementById('folder-images-input');
+        const uploadStatus = document.getElementById('upload-status');
+        const bgIntervalSelect = document.getElementById('bg-interval-select');
+
+        const blurRange = document.getElementById('blur-range');
+        const blurVal = document.getElementById('blur-val');
+        const dimRange = document.getElementById('dim-range');
+        const dimVal = document.getElementById('dim-val');
+        const timeSizeRange = document.getElementById('time-size-range');
+        const timeSizeVal = document.getElementById('time-size-val');
+        const dateSizeRange = document.getElementById('date-size-range');
+        const dateSizeVal = document.getElementById('date-size-val');
+        const posRange = document.getElementById('pos-range');
+        const posVal = document.getElementById('pos-val');
+
+        // 更新時間與日期
+        function updateDateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            clockEl.textContent = `${hours}:${minutes}:${seconds}`;
+
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const day = now.getDate();
+            const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            const weekday = weekdays[now.getDay()];
+            dateEl.textContent = `${year}年${month}月${day}日 ${weekday}`;
+        }
+
+        // 套用設定到畫面
+        function applySettings() {
+            clockEl.style.fontSize = settings.timeSize + 'px';
+            dateEl.style.fontSize = settings.dateSize + 'px';
+            contentEl.style.transform = `translateY(${settings.posY}px)`;
+            overlay.style.backgroundColor = `rgba(0, 0, 0, ${settings.dimLevel / 100})`;
+            bgLayer.style.filter = `blur(${settings.blurLevel}px)`;
+
+            bgSourceSelect.value = settings.bgSource;
+            bgIntervalSelect.value = settings.bgInterval;
+            
+            blurRange.value = settings.blurLevel;
+            blurVal.textContent = settings.blurLevel + 'px';
+
+            dimRange.value = settings.dimLevel;
+            dimVal.textContent = settings.dimLevel + '%';
+
+            timeSizeRange.value = settings.timeSize;
+            timeSizeVal.textContent = settings.timeSize + 'px';
+            
+            dateSizeRange.value = settings.dateSize;
+            dateSizeVal.textContent = settings.dateSize + 'px';
+            
+            posRange.value = settings.posY;
+            posVal.textContent = settings.posY + 'px';
+
+            if (settings.bgSource === 'folder') {
+                folderUploadContainer.style.display = 'block';
+                uploadStatus.textContent = `已載入 ${customImages.length} 張自訂圖片。`;
+            } else {
+                folderUploadContainer.style.display = 'none';
+            }
+        }
+
+        // 更換背景圖片
+        function changeBackground() {
+            let list = (settings.bgSource === 'folder' && customImages.length > 0) ? customImages : defaultWallpapers;
+            if (list.length === 0) {
+                list = defaultWallpapers;
+            }
+            currentBgIndex = (currentBgIndex + 1) % list.length;
+            bgLayer.style.backgroundImage = `url("${list[currentBgIndex]}")`;
+        }
+
+        // 重啟計時器
+        function restartBgTimer() {
+            if (bgTimer) clearInterval(bgTimer);
+            bgTimer = setInterval(changeBackground, settings.bgInterval);
+        }
+
+        // 儲存設定
+        function saveSettings() {
+            settings.bgSource = bgSourceSelect.value;
+            settings.bgInterval = parseInt(bgIntervalSelect.value);
+            settings.blurLevel = blurRange.value;
+            settings.dimLevel = dimRange.value;
+            settings.timeSize = timeSizeRange.value;
+            settings.dateSize = dateSizeRange.value;
+            settings.posY = posRange.value;
+
+            localStorage.setItem('ipad_bg_source', settings.bgSource);
+            localStorage.setItem('ipad_bg_interval', settings.bgInterval);
+            localStorage.setItem('ipad_blur_level', settings.blurLevel);
+            localStorage.setItem('ipad_dim_level', settings.dimLevel);
+            localStorage.setItem('ipad_time_size', settings.timeSize);
+            localStorage.setItem('ipad_date_size', settings.dateSize);
+            localStorage.setItem('ipad_pos_y', settings.posY);
+
+            applySettings();
+            changeBackground();
+            restartBgTimer();
+            settingsModal.classList.remove('active');
+        }
+
+        // 處理資料夾圖片讀取
+        selectFolderBtn.addEventListener('click', () => {
+            folderImagesInput.click();
+        });
+
+        folderImagesInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length === 0) return;
+
+            customImages = [];
+            let loadedCount = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    customImages.push(event.target.result);
+                    loadedCount++;
+                    if (loadedCount === files.length) {
+                        localStorage.setItem('ipad_custom_images', JSON.stringify(customImages));
+                        uploadStatus.textContent = `成功載入 ${customImages.length} 張圖片！請點擊下方儲存。`;
+                    }
+                }
+                reader.readAsDataURL(files.item(i));
+            }
+        });
+
+        // 清除所有已上傳圖片
+        clearImagesBtn.addEventListener('click', () => {
+            if (confirm('確定要清除所有已上傳的自訂圖片嗎？')) {
+                customImages = [];
+                localStorage.removeItem('ipad_custom_images');
+                uploadStatus.textContent = '已清除所有自訂圖片。';
+                changeBackground();
+            }
+        });
+
+        // 事件監聽
+        settingsBtn.addEventListener('click', () => settingsModal.classList.add('active'));
+        closeModalBtn.addEventListener('click', () => settingsModal.classList.remove('active'));
+        saveSettingsBtn.addEventListener('click', saveSettings);
+
+        bgSourceSelect.addEventListener('change', (e) => {
+            if (e.target.value === 'folder') {
+                folderUploadContainer.style.display = 'block';
+            } else {
+                folderUploadContainer.style.display = 'none';
+            }
+        });
+
+        // 即時預覽調整
+        blurRange.addEventListener('input', (e) => {
+            bgLayer.style.filter = `blur(${e.target.value}px)`;
+            blurVal.textContent = e.target.value + 'px';
+        });
+
+        dimRange.addEventListener('input', (e) => {
+            overlay.style.backgroundColor = `rgba(0, 0, 0, ${e.target.value / 100})`;
+            dimVal.textContent = e.target.value + '%';
+        });
+
+        timeSizeRange.addEventListener('input', (e) => {
+            clockEl.style.fontSize = e.target.value + 'px';
+            timeSizeVal.textContent = e.target.value + 'px';
+        });
+
+        dateSizeRange.addEventListener('input', (e) => {
+            dateEl.style.fontSize = e.target.value + 'px';
+            dateSizeVal.textContent = e.target.value + 'px';
+        });
+
+        posRange.addEventListener('input', (e) => {
+            contentEl.style.transform = `translateY(${e.target.value}px)`;
+            posVal.textContent = e.target.value + 'px';
+        });
+
+        // 全螢幕切換
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        });
+
+        // 初始化
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+        applySettings();
+        changeBackground();
+        restartBgTimer();
+    </script>
+</body>
+</html>
